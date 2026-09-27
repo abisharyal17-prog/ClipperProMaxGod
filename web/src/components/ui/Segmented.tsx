@@ -58,7 +58,7 @@ export function Segmented({
   return (
     <div
       ref={listRef}
-      role="tablist"
+      role="radiogroup"
       aria-label={ariaLabel}
       onKeyDown={onKeyDown}
       className={cn(
@@ -72,9 +72,9 @@ export function Segmented({
           <button
             key={option.value}
             type="button"
-            role="tab"
+            role="radio"
             data-value={option.value}
-            aria-selected={active}
+            aria-checked={active}
             tabIndex={active ? 0 : -1}
             disabled={option.disabled}
             onClick={() => onChange(option.value)}
@@ -82,7 +82,7 @@ export function Segmented({
               "inline-flex items-center justify-center rounded-sm font-medium transition-colors duration-150 ease-out",
               "disabled:cursor-not-allowed disabled:opacity-50",
               size === "sm" ? "h-7 px-2.5 text-label" : "h-8 px-3 text-body",
-              active ? "bg-surface text-text shadow-sm" : "text-muted hover:text-text",
+              active ? "bg-surface text-text" : "text-muted hover:text-text",
             )}
           >
             {option.label}

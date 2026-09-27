@@ -17,6 +17,7 @@ export function NewProjectDialog({ open, onClose, onCreated }: NewProjectDialogP
   const [source, setSource] = useState("");
   const [id, setId] = useState("");
   const [cookies, setCookies] = useState("");
+  const [showError, setShowError] = useState(false);
 
   const mutation = useMutation({
     mutationFn: () =>
@@ -30,6 +31,7 @@ export function NewProjectDialog({ open, onClose, onCreated }: NewProjectDialogP
       setSource("");
       setId("");
       setCookies("");
+      setShowError(false);
       onCreated(project);
     },
     onError: (error) => toast.error("Could not create project", { description: errorMessage(error) }),
@@ -37,7 +39,7 @@ export function NewProjectDialog({ open, onClose, onCreated }: NewProjectDialogP
 
   const submit = () => {
     if (!source.trim()) {
-      toast.warning("A source URL or path is required");
+      setShowError(true);
       return;
     }
     mutation.mutate();
@@ -54,24 +56,37 @@ export function NewProjectDialog({ open, onClose, onCreated }: NewProjectDialogP
           <Button variant="ghost" onClick={onClose} disabled={mutation.isPending}>
             Cancel
           </Button>
-          <Button variant="primary" onClick={submit} loading={mutation.isPending}>
+          <Button
+            type="submit"
+            form="new-project-form"
+            variant="primary"
+            loading={mutation.isPending}
+          >
             Create project
           </Button>
         </>
       }
     >
       <form
+        id="new-project-form"
         className="space-y-4"
         onSubmit={(event) => {
           event.preventDefault();
           submit();
         }}
       >
-        <Field label="Source" hint="YouTube/TikTok URL or a local file path.">
+        <Field
+          label="Source"
+          hint="YouTube/TikTok URL or a local file path."
+          error={showError && !source.trim() ? "A source URL or path is required." : undefined}
+        >
           <Input
             autoFocus
             value={source}
-            onChange={(event) => setSource(event.target.value)}
+            onChange={(event) => {
+              setSource(event.target.value);
+              if (showError) setShowError(false);
+            }}
             placeholder="https://youtube.com/watch?v=..."
             required
           />

@@ -54,7 +54,7 @@ function ProjectCard({
             )}
           </div>
         </Link>
-        <div className="absolute right-2 top-2 opacity-0 transition-opacity duration-150 ease-out group-hover:opacity-100 group-focus-within:opacity-100">
+        <div className="absolute right-2 top-2 opacity-0 transition-opacity duration-150 ease-out group-hover:opacity-100 group-focus-within:opacity-100 [@media(pointer:coarse)]:opacity-100">
           <span className="rounded-sm bg-surface/95 shadow-overlay">
             <Menu
               ariaLabel={`Actions for ${title}`}

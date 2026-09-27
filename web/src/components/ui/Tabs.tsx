@@ -16,24 +16,35 @@ export interface TabsProps {
   value: string;
   onChange: (value: string) => void;
   className?: string;
+  /** Id prefix so the tab list and its panel can reference each other. */
+  idPrefix?: string;
 }
 
-export function Tabs({ items, value, onChange, className }: TabsProps) {
+export function Tabs({ items, value, onChange, className, idPrefix = "tab" }: TabsProps) {
   const listRef = useRef<HTMLDivElement>(null);
 
+  const focusTab = (tabValue: string) => {
+    listRef.current
+      ?.querySelector<HTMLButtonElement>(`[data-tab="${CSS.escape(tabValue)}"]`)
+      ?.focus();
+  };
+
   const onKeyDown = (event: KeyboardEvent<HTMLDivElement>) => {
-    if (event.key !== "ArrowRight" && event.key !== "ArrowLeft") return;
+    const keys = ["ArrowRight", "ArrowLeft", "Home", "End"];
+    if (!keys.includes(event.key)) return;
     const enabled = items.filter((item) => !item.disabled);
     if (enabled.length === 0) return;
     const currentIndex = enabled.findIndex((item) => item.value === value);
-    const delta = event.key === "ArrowRight" ? 1 : -1;
-    const nextIndex = (currentIndex + delta + enabled.length) % enabled.length;
+    const from = currentIndex === -1 ? 0 : currentIndex;
+    let nextIndex = from;
+    if (event.key === "ArrowRight") nextIndex = (from + 1) % enabled.length;
+    else if (event.key === "ArrowLeft") nextIndex = (from - 1 + enabled.length) % enabled.length;
+    else if (event.key === "Home") nextIndex = 0;
+    else nextIndex = enabled.length - 1;
     event.preventDefault();
-    onChange(enabled[nextIndex].value);
-    const next = listRef.current?.querySelector<HTMLButtonElement>(
-      `[data-tab="${CSS.escape(enabled[nextIndex].value)}"]`,
-    );
-    next?.focus();
+    const next = enabled[nextIndex];
+    onChange(next.value);
+    focusTab(next.value);
   };
 
   return (
@@ -48,10 +59,12 @@ export function Tabs({ items, value, onChange, className }: TabsProps) {
         return (
           <button
             key={item.value}
+            id={`${idPrefix}-${item.value}`}
             data-tab={item.value}
             role="tab"
             type="button"
             aria-selected={active}
+            aria-controls={active ? `${idPrefix}-${item.value}-panel` : undefined}
             tabIndex={active ? 0 : -1}
             disabled={item.disabled}
             onClick={() => onChange(item.value)}

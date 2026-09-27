@@ -86,7 +86,8 @@ export function ToastProvider({ children }: { children: ReactNode }) {
           return (
             <div
               key={toast.id}
-              role="status"
+              role={toast.tone === "error" ? "alert" : "status"}
+              aria-live={toast.tone === "error" ? "assertive" : "polite"}
               className="pointer-events-auto flex items-start gap-3 rounded-lg border border-border bg-surface p-3 shadow-overlay motion-safe:animate-pop-in"
             >
               <span className={cn("mt-0.5", tone.color)}>{tone.icon}</span>

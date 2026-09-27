@@ -1,13 +1,13 @@
 import { useMemo, useState } from "react";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
-import { BadgeCheck, ExternalLink } from "lucide-react";
+import { BadgeCheck, Captions, ExternalLink } from "lucide-react";
 
 import { api, queryKeys } from "../../lib/api";
 import { errorMessage } from "../../lib/errors";
 import { formatClock } from "../../lib/format";
 import type { ClipList, ProjectText } from "../../lib/types";
 import { CopyButton } from "../common/CopyButton";
-import { ErrorState, LoadingState } from "../common/States";
+import { EmptyState, ErrorState, LoadingState } from "../common/States";
 import {
   Alert,
   Button,
@@ -44,7 +44,13 @@ function valueFor(text: ProjectText | undefined, tab: TextTab): string | null {
   }
 }
 
-export function TranscriptTab({ projectId }: { projectId: string }) {
+export interface TranscriptTabProps {
+  projectId: string;
+  onRunAnalysis?: () => void;
+  runDisabled?: boolean;
+}
+
+export function TranscriptTab({ projectId, onRunAnalysis, runDisabled = false }: TranscriptTabProps) {
   const toast = useToast();
   const queryClient = useQueryClient();
   const [tab, setTab] = useState<TextTab>("transcript");
@@ -71,6 +77,10 @@ export function TranscriptTab({ projectId }: { projectId: string }) {
   });
 
   const current = valueFor(textQuery.data, tab);
+  const hasAnyText = Boolean(
+    textQuery.data?.txt || textQuery.data?.payload || textQuery.data?.prompt || textQuery.data?.srt,
+  );
+  const combinedAvailable = Boolean(textQuery.data?.payload || textQuery.data?.prompt);
 
   const openCombined = useMemo(
     () => () => {
@@ -114,6 +124,7 @@ export function TranscriptTab({ projectId }: { projectId: string }) {
             <Button
               variant="ghost"
               size="sm"
+              disabled={!combinedAvailable}
               leftIcon={<ExternalLink className="h-3.5 w-3.5" aria-hidden="true" />}
               onClick={openCombined}
             >
@@ -127,10 +138,24 @@ export function TranscriptTab({ projectId }: { projectId: string }) {
             <pre className="max-h-[60vh] overflow-auto scrollbar-thin whitespace-pre-wrap break-words px-4 py-3 font-mono text-mono text-text">
               {current}
             </pre>
-          ) : (
+          ) : hasAnyText ? (
             <div className="px-4 py-12 text-center text-label text-muted">
-              No {tab} yet. Run analysis to generate it, or import clips below.
+              No {tab} output for this project.
             </div>
+          ) : (
+            <EmptyState
+              className="border-0"
+              icon={<Captions className="h-6 w-6" aria-hidden="true" />}
+              title="No transcript yet"
+              description="Run analysis to download the video, transcribe it and build the AI prompt."
+              action={
+                onRunAnalysis ? (
+                  <Button variant="primary" size="sm" disabled={runDisabled} onClick={onRunAnalysis}>
+                    Run analysis
+                  </Button>
+                ) : undefined
+              }
+            />
           )}
         </CardBody>
       </Card>

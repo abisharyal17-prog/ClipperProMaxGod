@@ -23,6 +23,12 @@ export function Dialog({ open, onClose, title, description, children, footer, cl
   const titleId = useId();
   const descriptionId = useId();
 
+  // Keep the latest onClose without re-running the focus trap on every render.
+  const onCloseRef = useRef(onClose);
+  useEffect(() => {
+    onCloseRef.current = onClose;
+  }, [onClose]);
+
   const focusables = useCallback((): HTMLElement[] => {
     if (!panelRef.current) return [];
     return Array.from(panelRef.current.querySelectorAll<HTMLElement>(FOCUSABLE)).filter(
@@ -37,14 +43,21 @@ export function Dialog({ open, onClose, title, description, children, footer, cl
     document.body.style.overflow = "hidden";
 
     const frame = window.requestAnimationFrame(() => {
-      const first = focusables()[0] ?? panelRef.current;
-      first?.focus();
+      const items = focusables();
+      // Prefer an explicit opt-in, then the first form control, then any
+      // focusable — never the header Close button by default.
+      const preferred =
+        panelRef.current?.querySelector<HTMLElement>("[data-autofocus]") ??
+        items.find((el) => ["INPUT", "TEXTAREA", "SELECT"].includes(el.tagName)) ??
+        items[0] ??
+        panelRef.current;
+      preferred?.focus();
     });
 
     const onKeyDown = (event: KeyboardEvent) => {
       if (event.key === "Escape") {
         event.preventDefault();
-        onClose();
+        onCloseRef.current();
         return;
       }
       if (event.key !== "Tab") return;
@@ -72,7 +85,7 @@ export function Dialog({ open, onClose, title, description, children, footer, cl
       document.body.style.overflow = previousOverflow;
       previouslyFocused?.focus?.();
     };
-  }, [open, onClose, focusables]);
+  }, [open, focusables]);
 
   if (!open) return null;
 

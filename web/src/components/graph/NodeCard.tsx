@@ -17,15 +17,17 @@ export interface PipelineNodeData extends Record<string, unknown> {
 
 export type PipelineNode = Node<PipelineNodeData, "pipeline">;
 
+// Single-hue palette: accent at varying opacity, neutral for misc. Keeps the
+// canvas on the one-accent rule instead of a rainbow of category colours.
 const CATEGORY_COLORS: Record<string, string> = {
-  input: "#0ea5e9",
-  audio: "#a855f7",
-  speech: "#ec4899",
-  video: "#f59e0b",
-  clips: "#10b981",
-  captions: "#8b5cf6",
-  output: "#6366f1",
-  misc: "#94a3b8",
+  input: "rgb(var(--accent) / 1)",
+  audio: "rgb(var(--accent) / 0.85)",
+  speech: "rgb(var(--accent) / 0.7)",
+  video: "rgb(var(--accent) / 0.55)",
+  clips: "rgb(var(--accent) / 0.9)",
+  captions: "rgb(var(--accent) / 0.75)",
+  output: "rgb(var(--accent) / 0.95)",
+  misc: "rgb(var(--muted) / 0.8)",
 };
 
 export function categoryColor(category: string): string {
@@ -71,7 +73,7 @@ export function NodeCard({ data, selected }: NodeProps<PipelineNode>) {
   return (
     <div
       className={cn(
-        "w-56 rounded-lg border bg-surface shadow-overlay/0 transition-colors duration-150 ease-out",
+        "w-56 rounded-lg border bg-surface transition-colors duration-150 ease-out",
         STATUS_BORDER[status],
         selected && "ring-2 ring-accent ring-offset-2 ring-offset-bg",
       )}

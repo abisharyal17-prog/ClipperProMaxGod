@@ -40,7 +40,7 @@ export function CookieHealthDot() {
         aria-label={`Cookies status: ${label}. Open settings.`}
       >
         <StatusDot tone={TONE[health]} className={cn(health === "ok" && "bg-success")} />
-        <span className="hidden md:inline">Cookies</span>
+        <span>Cookies</span>
       </Link>
     </Tooltip>
   );

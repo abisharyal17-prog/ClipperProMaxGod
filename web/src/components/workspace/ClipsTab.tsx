@@ -135,8 +135,9 @@ export function ClipsTab({ projectId, clips }: ClipsTabProps) {
               )
             }
             onClick={() => setSortDesc((value) => !value)}
+            aria-pressed={sortDesc}
           >
-            Score {sortDesc ? "desc" : "asc"}
+            {sortDesc ? "Highest score first" : "Lowest score first"}
           </Button>
           <Button
             variant="primary"
@@ -179,7 +180,13 @@ export function ClipsTab({ projectId, clips }: ClipsTabProps) {
                   </TD>
                   <TD>
                     <div className="flex items-center gap-2">
-                      <Progress value={ratio} tone={tone} size="sm" className="w-20" />
+                      <Progress
+                        value={ratio}
+                        tone={tone}
+                        size="sm"
+                        className="w-20"
+                        label={`Score for ${clip.title?.trim() || clip.id}`}
+                      />
                       <span className="w-10 text-right font-mono text-mono tabular-nums text-muted">
                         {score == null ? "—" : score.toFixed(1)}
                       </span>

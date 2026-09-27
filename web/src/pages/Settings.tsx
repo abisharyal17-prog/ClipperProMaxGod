@@ -63,11 +63,86 @@ function settingsPayload(settings: Settings): SettingsUpdate {
   };
 }
 
+/** A numeric field that keeps the raw text, validates on the fly and only
+ * commits a real number — so clearing a box never silently becomes 0. */
+interface NumberFieldProps {
+  name: string;
+  label: string;
+  hint?: string;
+  value: number;
+  min?: number;
+  max?: number;
+  step?: number;
+  integer?: boolean;
+  onCommit: (value: number) => void;
+  onValidityChange: (name: string, valid: boolean) => void;
+}
+
+function NumberField({
+  name,
+  label,
+  hint,
+  value,
+  min,
+  max,
+  step,
+  integer = false,
+  onCommit,
+  onValidityChange,
+}: NumberFieldProps) {
+  const [text, setText] = useState(String(value));
+  const [error, setError] = useState<string | null>(null);
+
+  useEffect(() => {
+    setText(String(value));
+    setError(null);
+    onValidityChange(name, true);
+    // Re-sync only when the committed value changes.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [value]);
+
+  const handle = (raw: string) => {
+    setText(raw);
+    const fail = (message: string) => {
+      setError(message);
+      onValidityChange(name, false);
+    };
+    if (raw.trim() === "") return fail("Required");
+    const parsed = Number(raw);
+    if (!Number.isFinite(parsed)) return fail("Enter a number");
+    if (min != null && parsed < min) return fail(`Must be ≥ ${min}`);
+    if (max != null && parsed > max) return fail(`Must be ≤ ${max}`);
+    if (integer && !Number.isInteger(parsed)) return fail("Whole numbers only");
+    setError(null);
+    onValidityChange(name, true);
+    onCommit(parsed);
+  };
+
+  return (
+    <Field label={label} hint={hint} error={error ?? undefined}>
+      <Input
+        type="number"
+        min={min}
+        max={max}
+        step={step}
+        value={text}
+        className="font-mono tabular-nums"
+        onChange={(event) => handle(event.target.value)}
+      />
+    </Field>
+  );
+}
+
 export default function SettingsPage() {
   const toast = useToast();
   const queryClient = useQueryClient();
   const [draft, setDraft] = useState<Settings | null>(null);
   const [saved, setSaved] = useState<Settings | null>(null);
+  const [numericValidity, setNumericValidity] = useState<Record<string, boolean>>({});
+
+  const setValidity = (name: string, valid: boolean) =>
+    setNumericValidity((current) => (current[name] === valid ? current : { ...current, [name]: valid }));
+  const numericInvalid = Object.values(numericValidity).some((valid) => valid === false);
 
   const settingsQuery = useQuery({ queryKey: queryKeys.settings, queryFn: api.getSettings });
   const stylesQuery = useQuery({ queryKey: queryKeys.styles, queryFn: api.styles });
@@ -128,7 +203,7 @@ export default function SettingsPage() {
           {dirty ? <Badge variant="warning">Unsaved changes</Badge> : null}
           <Button
             variant="primary"
-            disabled={!dirty}
+            disabled={!dirty || numericInvalid}
             loading={mutation.isPending}
             leftIcon={<Save className="h-4 w-4" aria-hidden="true" />}
             onClick={save}
@@ -150,16 +225,17 @@ export default function SettingsPage() {
               onChange={(event) => updateRender("encoder", event.target.value)}
             />
           </Field>
-          <Field label="CRF" hint="Lower is higher quality (0–51).">
-            <Input
-              type="number"
-              min={0}
-              max={51}
-              value={draft.render.crf}
-              onChange={(event) => updateRender("crf", Number(event.target.value))}
-              className="font-mono tabular-nums"
-            />
-          </Field>
+          <NumberField
+            name="crf"
+            label="CRF"
+            hint="Lower is higher quality (0–51)."
+            value={draft.render.crf}
+            min={0}
+            max={51}
+            integer
+            onCommit={(value) => updateRender("crf", value)}
+            onValidityChange={setValidity}
+          />
           <Field label="Preset">
             <Select
               value={draft.render.preset}
@@ -167,48 +243,52 @@ export default function SettingsPage() {
               onChange={(event) => updateRender("preset", event.target.value)}
             />
           </Field>
-          <Field label="Width (px)">
-            <Input
-              type="number"
-              min={1}
-              value={draft.render.width}
-              onChange={(event) => updateRender("width", Number(event.target.value))}
-              className="font-mono tabular-nums"
-            />
-          </Field>
-          <Field label="Height (px)">
-            <Input
-              type="number"
-              min={1}
-              value={draft.render.height}
-              onChange={(event) => updateRender("height", Number(event.target.value))}
-              className="font-mono tabular-nums"
-            />
-          </Field>
-          <Field label="FPS" hint="0 inherits the source frame rate.">
-            <Input
-              type="number"
-              min={0}
-              value={draft.render.fps}
-              onChange={(event) => updateRender("fps", Number(event.target.value))}
-              className="font-mono tabular-nums"
-            />
-          </Field>
+          <NumberField
+            name="width"
+            label="Width (px)"
+            value={draft.render.width}
+            min={16}
+            integer
+            onCommit={(value) => updateRender("width", value)}
+            onValidityChange={setValidity}
+          />
+          <NumberField
+            name="height"
+            label="Height (px)"
+            value={draft.render.height}
+            min={16}
+            integer
+            onCommit={(value) => updateRender("height", value)}
+            onValidityChange={setValidity}
+          />
+          <NumberField
+            name="fps"
+            label="FPS"
+            hint="0 inherits the source frame rate."
+            value={draft.render.fps}
+            min={0}
+            max={240}
+            integer
+            onCommit={(value) => updateRender("fps", value)}
+            onValidityChange={setValidity}
+          />
           <Field label="Audio bitrate">
             <Input
               value={draft.render.audio_bitrate}
               onChange={(event) => updateRender("audio_bitrate", event.target.value)}
             />
           </Field>
-          <Field label="Loudness (LUFS)" hint="Platform target, e.g. -14.">
-            <Input
-              type="number"
-              step={0.5}
-              value={draft.render.audio_lufs}
-              onChange={(event) => updateRender("audio_lufs", Number(event.target.value))}
-              className="font-mono tabular-nums"
-            />
-          </Field>
+          <NumberField
+            name="audio_lufs"
+            label="Loudness (LUFS)"
+            hint="Platform target, e.g. -14."
+            value={draft.render.audio_lufs}
+            min={-60}
+            max={0}
+            step={0.5}
+            onCommit={(value) => updateRender("audio_lufs", value)}
+            onValidityChange={setValidity}
+          />
           <div className="flex items-center justify-between gap-3 self-end rounded-md border border-border bg-surface-2 px-3.5 py-2.5">
             <span className="text-body text-text">Faststart</span>
             <Switch

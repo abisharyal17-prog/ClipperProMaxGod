@@ -3,10 +3,10 @@ import { Play, Waypoints } from "lucide-react";
 
 import type { Graph, JobStage } from "../../lib/types";
 import type { NodeRunState } from "../../hooks/useJobSocket";
-import { ErrorState, LoadingState } from "../common/States";
+import { EmptyState, ErrorState } from "../common/States";
 import { PipelineGraph } from "../graph/PipelineGraph";
 import { categoryColor } from "../graph/NodeCard";
-import { Badge, Button, Card, Progress, Segmented } from "../ui";
+import { Badge, Button, Card, Progress, Segmented, Skeleton } from "../ui";
 import type { BadgeVariant } from "../ui";
 
 export interface PipelineTabProps {
@@ -112,14 +112,20 @@ export function PipelineTab({
       ) : null}
 
       {isLoading ? (
-        <LoadingState label="Loading pipeline graph" className="py-24" />
+        <Card className="h-[600px] overflow-hidden p-4">
+          <Skeleton className="h-full w-full" />
+        </Card>
       ) : error ? (
         <ErrorState
           message={error instanceof Error ? error.message : "Could not load the graph."}
           onRetry={onRetry}
         />
       ) : !graph || graph.nodes.length === 0 ? (
-        <ErrorState message="This stage has no nodes yet." onRetry={onRetry} />
+        <EmptyState
+          icon={<Waypoints className="h-6 w-6" aria-hidden="true" />}
+          title="Nothing to run yet"
+          description="This stage has no nodes for this project. It appears once the earlier stage has produced its inputs."
+        />
       ) : (
         <div className={selected ? "grid gap-4 lg:grid-cols-[1fr_320px]" : ""}>
           <Card className="h-[600px] overflow-hidden p-0">

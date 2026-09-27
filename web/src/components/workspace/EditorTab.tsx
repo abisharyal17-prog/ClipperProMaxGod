@@ -19,6 +19,8 @@ export interface EditorTabProps {
   defaultReframe: string;
   onRenderSelected: (options: RenderOptions) => void;
   renderPending: boolean;
+  submitPending?: boolean;
+  optionsLoading?: boolean;
 }
 
 const REFRAME_OPTIONS = [
@@ -38,6 +40,8 @@ export function EditorTab({
   defaultReframe,
   onRenderSelected,
   renderPending,
+  submitPending = false,
+  optionsLoading = false,
 }: EditorTabProps) {
   const toast = useToast();
   const queryClient = useQueryClient();
@@ -56,6 +60,10 @@ export function EditorTab({
   }, [clips]);
 
   const selected = draft.find((clip) => clip.id === selectedId) ?? null;
+
+  const invalidRanges = (selected?.exclude_ranges ?? []).some(
+    ([start, end]) => !Number.isFinite(start) || !Number.isFinite(end) || start < 0 || end <= start,
+  );
 
   const styleOptions = useMemo(
     () => [
@@ -151,7 +159,7 @@ export function EditorTab({
           <Button
             variant="secondary"
             size="sm"
-            disabled={!dirty}
+            disabled={!dirty || invalidRanges || optionsLoading}
             loading={saveMutation.isPending}
             leftIcon={<Save className="h-3.5 w-3.5" aria-hidden="true" />}
             onClick={() => saveMutation.mutate()}
@@ -162,7 +170,7 @@ export function EditorTab({
             variant="primary"
             size="sm"
             loading={renderPending}
-            disabled={!selected}
+            disabled={!selected || submitPending}
             leftIcon={<Video className="h-3.5 w-3.5" aria-hidden="true" />}
             onClick={renderSelected}
           >
@@ -195,6 +203,7 @@ export function EditorTab({
                       aria-hidden="true"
                     />
                     <span className="min-w-0 flex-1">
+                      <span className="sr-only">{clip.enabled ? "Included" : "Excluded"}: </span>
                       <span className="block truncate text-body">{clip.title?.trim() || clip.id}</span>
                       <span className="block font-mono text-mono tabular-nums text-muted">
                         {formatClock(clip.start)}–{formatClock(clip.end)} · {formatDuration(clip.end - clip.start)}
@@ -337,23 +346,28 @@ export function EditorTab({
                   ))}
                 </div>
               )}
+              {invalidRanges ? (
+                <p role="alert" className="mt-2 text-label text-danger">
+                  Each range needs a start ≥ 0 and an end after the start.
+                </p>
+              ) : null}
             </div>
 
             <div className="rounded-md border border-border bg-surface-2 p-3">
               <p className="mb-1.5 text-label font-medium text-muted">Resolved options</p>
               <dl className="grid grid-cols-1 gap-x-6 gap-y-1 sm:grid-cols-2">
                 {[
-                  ["caption_style", captionLabel],
-                  ["font", resolvedStyle?.font ?? "default"],
-                  ["mode", resolvedStyle?.mode ?? "default"],
-                  ["reframe", resolvedReframe],
-                  ["lut", selected.lut ?? "none"],
-                  ["music", selected.music ?? "none"],
-                  ["title_text", selected.title_text?.trim() || "none"],
-                  ["exclude_ranges", String(selected.exclude_ranges.length)],
+                  ["Caption style", captionLabel],
+                  ["Font", resolvedStyle?.font ?? "default"],
+                  ["Caption mode", resolvedStyle?.mode ?? "default"],
+                  ["Reframe", resolvedReframe],
+                  ["LUT", selected.lut ?? "none"],
+                  ["Music", selected.music ?? "none"],
+                  ["Title", selected.title_text?.trim() || "none"],
+                  ["Excluded ranges", String(selected.exclude_ranges.length)],
                 ].map(([key, value]) => (
                   <div key={key} className="flex items-center justify-between gap-3">
-                    <dt className="font-mono text-mono text-muted">{key}</dt>
+                    <dt className="text-label text-muted">{key}</dt>
                     <dd className="truncate font-mono text-mono text-text">{value}</dd>
                   </div>
                 ))}

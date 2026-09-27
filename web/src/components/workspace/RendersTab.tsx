@@ -7,7 +7,12 @@ import { formatDuration } from "../../lib/format";
 import type { MetadataPack, Render } from "../../lib/types";
 import { CopyButton } from "../common/CopyButton";
 import { EmptyState, ErrorState, LoadingState } from "../common/States";
-import { Badge, Card, CardBody, CardHeader, CardTitle } from "../ui";
+import { Badge, Card, CardBody, CardHeader, CardTitle, Skeleton } from "../ui";
+
+function clipLabel(clipId: string): string {
+  const digits = clipId.match(/\d+/);
+  return digits ? `Clip ${Number(digits[0])}` : clipId;
+}
 
 function isRecord(value: unknown): value is Record<string, unknown> {
   return Boolean(value) && typeof value === "object" && !Array.isArray(value);
@@ -87,12 +92,16 @@ function RenderCard({ render, pack }: { render: Render; pack: PublishPack | null
       <CardBody className="flex flex-1 flex-col gap-3">
         <div className="min-w-0">
           <p className="truncate text-body font-semibold text-text">
-            {render.title?.trim() || render.clip_id}
+            {render.title?.trim() || clipLabel(render.clip_id)}
           </p>
           <div className="mt-1.5 flex flex-wrap items-center gap-1.5">
             <Badge variant="neutral">{formatDuration(render.duration)}</Badge>
-            <Badge variant="outline">{render.camera}</Badge>
-            <Badge variant="outline">{render.reframe}</Badge>
+            <Badge variant="outline" className="capitalize">
+              {render.camera}
+            </Badge>
+            <Badge variant="outline" className="capitalize">
+              {render.reframe}
+            </Badge>
           </div>
         </div>
 
@@ -117,7 +126,7 @@ function RenderCard({ render, pack }: { render: Render; pack: PublishPack | null
         ) : null}
 
         <div className="mt-auto flex items-center justify-between gap-2">
-          <Badge variant="accent">{render.clip_id}</Badge>
+          <Badge variant="accent">{clipLabel(render.clip_id)}</Badge>
           <div className="flex items-center gap-2">
             {pack ? <CopyButton text={packText(pack)} label="Copy pack" size="sm" /> : null}
             <a
@@ -168,12 +177,15 @@ export function RendersTab({ projectId, renders }: { projectId: string; renders:
         <CardHeader>
           <CardTitle>Publish pack</CardTitle>
           <div className="flex items-center gap-2">
-            {metadataQuery.isLoading ? <span className="text-label text-muted">Loading…</span> : null}
-            <CopyButton
-              text={metadataQuery.data?.markdown ?? ""}
-              disabled={!metadataQuery.data?.markdown}
-              label="Copy all"
-            />
+            {metadataQuery.isLoading ? (
+              <Skeleton className="h-8 w-20 rounded-sm" />
+            ) : (
+              <CopyButton
+                text={metadataQuery.data?.markdown ?? ""}
+                disabled={!metadataQuery.data?.markdown}
+                label="Copy all"
+              />
+            )}
           </div>
         </CardHeader>
         <CardBody className="p-0">

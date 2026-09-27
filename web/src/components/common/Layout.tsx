@@ -39,6 +39,12 @@ export function Layout() {
 
   return (
     <div className="flex min-h-full flex-col">
+      <a
+        href="#main"
+        className="sr-only focus:not-sr-only focus:absolute focus:left-3 focus:top-3 focus:z-50 focus:rounded-sm focus:border focus:border-border focus:bg-surface focus:px-3 focus:py-2 focus:text-body focus:text-text focus:shadow-overlay"
+      >
+        Skip to content
+      </a>
       <header className="sticky top-0 z-40 border-b border-border bg-surface">
         <div className="mx-auto flex h-14 w-full max-w-[1200px] items-center gap-6 px-6">
           <Link
@@ -112,7 +118,7 @@ export function Layout() {
         ) : null}
       </header>
 
-      <main className="mx-auto w-full max-w-[1200px] flex-1 px-6 py-6">
+      <main id="main" className="mx-auto w-full max-w-[1200px] flex-1 px-6 py-6">
         <Outlet />
       </main>
     </div>

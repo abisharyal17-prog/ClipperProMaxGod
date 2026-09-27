@@ -58,7 +58,7 @@ export default function Workspace() {
     setSearchParams(next, { replace: true });
   };
 
-  const [pipelineStage, setPipelineStage] = useState<JobStage>("render");
+  const [pipelineStage, setPipelineStage] = useState<JobStage>("analysis");
   const [cookiesGate, setCookiesGate] = useState(false);
 
   const projectQuery = useQuery({
@@ -175,6 +175,7 @@ export default function Workspace() {
       : null;
 
   const runJob = (stage: JobStage, options?: RenderOptions | AnalysisOptions) => {
+    if (running || createJobMutation.isPending) return; // guard every entry point
     const defaults: RenderOptions | AnalysisOptions =
       stage === "analysis"
         ? { n_clips: 8, min_duration: 15, max_duration: 60 }
@@ -244,13 +245,13 @@ export default function Workspace() {
             </p>
             <div className="mt-2 flex flex-wrap items-center gap-1.5">
               <Badge variant={summary.has_source ? "success" : "outline"}>
-                {summary.has_source ? "source" : "no source"}
+                {summary.has_source ? "Source" : "No source"}
               </Badge>
               <Badge variant={summary.has_transcript ? "success" : "outline"}>
-                {summary.has_transcript ? "transcript" : "no transcript"}
+                {summary.has_transcript ? "Transcript" : "No transcript"}
               </Badge>
               <Badge variant={summary.has_clips ? "success" : "outline"}>
-                {summary.has_clips ? "clips" : "no clips"}
+                {summary.has_clips ? "Clips" : "No clips"}
               </Badge>
             </div>
           </div>
@@ -259,7 +260,7 @@ export default function Workspace() {
             <Button
               variant="secondary"
               size="sm"
-              disabled={running}
+              disabled={running || createJobMutation.isPending}
               leftIcon={<Play className="h-3.5 w-3.5" aria-hidden="true" />}
               onClick={() => runJob("analysis")}
             >
@@ -268,7 +269,7 @@ export default function Workspace() {
             <Button
               variant="primary"
               size="sm"
-              disabled={running}
+              disabled={running || createJobMutation.isPending}
               leftIcon={<Play className="h-3.5 w-3.5" aria-hidden="true" />}
               onClick={() => runJob("render")}
             >
@@ -295,6 +296,13 @@ export default function Workspace() {
 
       <Tabs items={tabs} value={tab} onChange={setTab} />
 
+      <div
+        id={`tab-${tab}-panel`}
+        role="tabpanel"
+        aria-labelledby={`tab-${tab}`}
+        tabIndex={-1}
+        className="focus-visible:outline-none"
+      >
       {tab === "pipeline" ? (
         <PipelineTab
           stage={pipelineStage}
@@ -308,27 +316,41 @@ export default function Workspace() {
             void (pipelineStage === "analysis" ? analysisGraphQuery.refetch() : renderGraphQuery.refetch())
           }
           states={nodeStates}
-          running={running}
+          running={running || createJobMutation.isPending}
           onRun={(stage) => runJob(stage)}
         />
       ) : tab === "transcript" ? (
-        <TranscriptTab projectId={id} />
-      ) : tab === "clips" ? (
-        <ClipsTab projectId={id} clips={detail.clips} />
-      ) : tab === "editor" ? (
-        <EditorTab
+        <TranscriptTab
           projectId={id}
-          clips={detail.clips}
-          styles={stylesQuery.data ?? []}
-          assets={assetsQuery.data ?? null}
-          defaultCaptionStyle={settingsQuery.data?.default_caption_style ?? null}
-          defaultReframe={settingsQuery.data?.default_reframe ?? "auto"}
-          renderPending={running && activeForProject?.job.stage === "render"}
-          onRenderSelected={(options) => runJob("render", options)}
+          onRunAnalysis={() => runJob("analysis")}
+          runDisabled={running || createJobMutation.isPending}
         />
       ) : (
-        <RendersTab projectId={id} renders={detail.renders} />
+        // Clips and Editor stay mounted so in-progress edits survive tab switches.
+        <>
+          <div className={tab === "clips" ? undefined : "hidden"}>
+            <ClipsTab projectId={id} clips={detail.clips} />
+          </div>
+          <div className={tab === "editor" ? undefined : "hidden"}>
+            <EditorTab
+              projectId={id}
+              clips={detail.clips}
+              styles={stylesQuery.data ?? []}
+              assets={assetsQuery.data ?? null}
+              defaultCaptionStyle={settingsQuery.data?.default_caption_style ?? null}
+              defaultReframe={settingsQuery.data?.default_reframe ?? "auto"}
+              optionsLoading={
+                stylesQuery.isLoading || assetsQuery.isLoading || settingsQuery.isLoading
+              }
+              renderPending={running && activeForProject?.job.stage === "render"}
+              submitPending={createJobMutation.isPending}
+              onRenderSelected={(options) => runJob("render", options)}
+            />
+          </div>
+          {tab === "renders" ? <RendersTab projectId={id} renders={detail.renders} /> : null}
+        </>
       )}
+      </div>
 
       <Dialog
         open={cookiesGate}

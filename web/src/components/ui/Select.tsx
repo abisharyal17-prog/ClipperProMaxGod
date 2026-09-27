@@ -1,8 +1,9 @@
-import { forwardRef } from "react";
+import { forwardRef, useContext } from "react";
 import type { SelectHTMLAttributes } from "react";
 import { ChevronDown } from "lucide-react";
 
 import { cn } from "../../lib/cn";
+import { FieldContext } from "./Input";
 
 export interface SelectOption {
   value: string;
@@ -17,21 +18,34 @@ export interface SelectProps extends SelectHTMLAttributes<HTMLSelectElement> {
 }
 
 export const Select = forwardRef<HTMLSelectElement, SelectProps>(function Select(
-  { className, options, invalid = false, placeholder, children, ...props },
+  {
+    className,
+    options,
+    invalid,
+    placeholder,
+    children,
+    id,
+    "aria-describedby": ariaDescribedBy,
+    ...props
+  },
   ref,
 ) {
+  const field = useContext(FieldContext);
+  const isInvalid = invalid ?? field?.invalid ?? false;
   return (
     <div className="relative">
       <select
         ref={ref}
+        id={id ?? field?.id}
+        aria-describedby={ariaDescribedBy ?? field?.describedBy}
         className={cn(
           "h-9 w-full appearance-none rounded-sm border border-border bg-surface-2 pl-3 pr-8 text-body text-text",
           "transition-colors duration-150 ease-out",
           "disabled:cursor-not-allowed disabled:opacity-50",
-          invalid && "border-danger focus-visible:ring-danger",
+          isInvalid && "border-danger focus-visible:ring-danger",
           className,
         )}
-        aria-invalid={invalid || undefined}
+        aria-invalid={isInvalid || undefined}
         {...props}
       >
         {placeholder ? (
