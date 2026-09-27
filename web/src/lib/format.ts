@@ -19,31 +19,6 @@ export function formatDuration(seconds: number | null | undefined): string {
   return formatClock(seconds);
 }
 
-export function formatBytes(bytes: number): string {
-  if (!Number.isFinite(bytes) || bytes < 0) return "--";
-  const units = ["B", "KB", "MB", "GB", "TB"];
-  let value = bytes;
-  let i = 0;
-  while (value >= 1024 && i < units.length - 1) {
-    value /= 1024;
-    i += 1;
-  }
-  return `${value.toFixed(value >= 10 || i === 0 ? 0 : 1)} ${units[i]}`;
-}
-
-export function formatDate(value: string | number | null | undefined): string {
-  if (value == null) return "--";
-  const d = typeof value === "number" ? new Date(value * 1000) : new Date(value);
-  if (Number.isNaN(d.getTime())) return "--";
-  return d.toLocaleString(undefined, {
-    year: "numeric",
-    month: "short",
-    day: "numeric",
-    hour: "2-digit",
-    minute: "2-digit",
-  });
-}
-
 export function relativeTime(value: string | null | undefined): string {
   if (!value) return "--";
   const d = new Date(value);
@@ -62,11 +37,6 @@ export function relativeTime(value: string | null | undefined): string {
 
 export function titleOf(summary: { title: string | null; id: string }): string {
   return summary.title?.trim() || summary.id;
-}
-
-export function pct01(value: number | null): number {
-  if (value == null || !Number.isFinite(value)) return 0;
-  return Math.max(0, Math.min(1, value));
 }
 
 /** Human-readable remaining time from a number of days, e.g. "10.7 days". */

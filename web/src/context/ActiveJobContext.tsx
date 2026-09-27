@@ -25,7 +25,6 @@ export interface ActiveJobContextValue {
   overall: number;
   currentNode: string | null;
   setActiveJob: (job: Job, projectId: string) => void;
-  clearActiveJob: () => void;
 }
 
 const ActiveJobContext = createContext<ActiveJobContextValue | null>(null);
@@ -48,8 +47,6 @@ export function ActiveJobProvider({ children }: { children: ReactNode }) {
     });
   }, []);
 
-  const clearActiveJob = useCallback(() => setActive(null), []);
-
   const value = useMemo<ActiveJobContextValue>(
     () => ({
       active,
@@ -61,7 +58,6 @@ export function ActiveJobProvider({ children }: { children: ReactNode }) {
       overall,
       currentNode,
       setActiveJob,
-      clearActiveJob,
     }),
     [
       active,
@@ -73,7 +69,6 @@ export function ActiveJobProvider({ children }: { children: ReactNode }) {
       overall,
       currentNode,
       setActiveJob,
-      clearActiveJob,
     ],
   );
 

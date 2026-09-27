@@ -1,5 +1,5 @@
-import { useId } from "react";
-import type { ReactNode } from "react";
+import { cloneElement, isValidElement, useId } from "react";
+import type { ReactElement, ReactNode } from "react";
 
 import { cn } from "../../lib/cn";
 
@@ -10,14 +10,28 @@ export interface TooltipProps {
   children: ReactNode;
 }
 
+function mergeDescribedBy(existing: string | undefined, id: string): string {
+  return existing ? `${existing} ${id}` : id;
+}
+
 /** CSS-driven tooltip: appears on hover and keyboard focus within. */
 export function Tooltip({ content, side = "bottom", className, children }: TooltipProps) {
   const id = useId();
+
+  // Put the description on the focusable child, not a non-focusable wrapper, so
+  // assistive tech actually announces it.
+  const child = isValidElement(children)
+    ? cloneElement(children as ReactElement<{ "aria-describedby"?: string }>, {
+        "aria-describedby": mergeDescribedBy(
+          (children.props as { "aria-describedby"?: string })["aria-describedby"],
+          id,
+        ),
+      })
+    : children;
+
   return (
     <span className="group/tooltip relative inline-flex">
-      <span aria-describedby={id} className="inline-flex">
-        {children}
-      </span>
+      <span className="inline-flex">{child}</span>
       <span
         role="tooltip"
         id={id}

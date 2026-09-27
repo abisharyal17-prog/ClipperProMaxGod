@@ -97,7 +97,7 @@ export function Menu({ items, ariaLabel, triggerIcon, align = "right", className
           role="menu"
           onKeyDown={onMenuKeyDown}
           className={cn(
-            "absolute z-30 mt-1 min-w-[10rem] rounded-md border border-border bg-surface p-1 shadow-overlay motion-safe:animate-pop-in",
+            "absolute z-30 mt-1 min-w-[10rem] rounded-lg border border-border bg-surface p-1 shadow-overlay motion-safe:animate-pop-in",
             align === "right" ? "right-0" : "left-0",
           )}
         >

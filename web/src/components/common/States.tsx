@@ -84,16 +84,6 @@ export function EmptyState({
   );
 }
 
-export function SkeletonText({ lines = 3, className }: { lines?: number; className?: string }) {
-  return (
-    <div className={cn("space-y-2", className)}>
-      {Array.from({ length: lines }).map((_value, index) => (
-        <Skeleton key={index} className={cn("h-4", index === lines - 1 ? "w-2/3" : "w-full")} />
-      ))}
-    </div>
-  );
-}
-
 export function SkeletonTable({ rows = 5, className }: { rows?: number; className?: string }) {
   return (
     <div className={cn("space-y-2", className)}>

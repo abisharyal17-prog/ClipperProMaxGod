@@ -75,8 +75,11 @@ export function PipelineGraph({ graph, states, selectedId, onSelect }: PipelineG
       minZoom={0.2}
       maxZoom={1.75}
       nodesConnectable={false}
+      nodesFocusable
+      edgesFocusable
       onNodeClick={(_event, node: Node) => onSelect(node.id)}
       onPaneClick={() => onSelect(null)}
+      onSelectionChange={({ nodes: selectedNodes }) => onSelect(selectedNodes[0]?.id ?? null)}
       className="bg-bg"
     >
       <Background variant={BackgroundVariant.Dots} gap={18} size={1} color="rgb(var(--border))" />
