@@ -1,0 +1,33 @@
+# Python / uv
+.venv/
+.uv-cache/
+.pythons/
+__pycache__/
+*.pyc
+.pytest_cache/
+.ruff_cache/
+.ultralytics/
+
+# Local toolchain binaries (installed by scripts/setup.ps1)
+bin/*.exe
+bin/*.dll
+
+# Model weights
+assets/models/
+
+# Per-video working data + renders
+data/projects/
+
+# Secrets: global cookie store, settings, engine token
+data/cookies/
+data/settings.json
+data/auth.json
+
+# Frontend
+web/node_modules/
+web/dist/
+
+# OS / editor
+.DS_Store
+Thumbs.db
+*.log
