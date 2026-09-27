@@ -11,6 +11,10 @@
 #
 # Parameters (optional):
 #   powershell -ExecutionPolicy Bypass -File install.ps1 -Repo owner/name -AppUrl https://clipper.vercel.app
+#   -Token <pat>         install from a private repo (or set CLIPPER_GH_TOKEN)
+#   -LocalSource <path>  install from a local checkout instead of GitHub (dev/testing)
+#   -Extras "ml"         comma-separated uv extras (use "" to skip the ML stack)
+#   -NoStart             install but don't launch the engine
 #
 param(
     [string]$Repo  = $(if ($env:CLIPPER_REPO) { $env:CLIPPER_REPO } else { "abisharyal17-prog/ClipperProMaxGod" }),
@@ -18,6 +22,8 @@ param(
     [string]$Dir   = $(Join-Path $env:LOCALAPPDATA "Clipper"),
     [string]$AppUrl = $env:CLIPPER_APP_URL,
     [string]$Extras = "ml",
+    [string]$Token = $env:CLIPPER_GH_TOKEN,
+    [string]$LocalSource = $env:CLIPPER_LOCAL_SOURCE,
     [switch]$Update,
     [switch]$NoStart
 )
@@ -70,18 +76,33 @@ if (Test-Port $Port) {
 # --- 1. fetch the source --------------------------------------------------
 Step "Source code"
 $haveSource = Test-Path -LiteralPath (Join-Path $AppDir "pyproject.toml")
-if ($haveSource -and -not $Update) {
+if ($LocalSource) {
+    $src = (Resolve-Path -LiteralPath $LocalSource).Path
+    Say "+ copying local source: $src"
+    New-Item -ItemType Directory -Path $AppDir -Force | Out-Null
+    # Exclude heavy / generated dirs (robocopy /XD matches these names anywhere).
+    $exclude = @(".git", ".venv", "bin", ".uv-cache", ".pythons", "data",
+                 "node_modules", "dist", "__pycache__", ".ruff_cache", ".pytest_cache",
+                 ".ultralytics")
+    & robocopy $src $AppDir /E /NFL /NDL /NJH /NJS /NP /XD $exclude /XF *.pyc | Out-Null
+    if ($LASTEXITCODE -ge 8) { Fail "copying local source failed (robocopy $LASTEXITCODE)" }
+    $global:LASTEXITCODE = 0
+    Say "= source ready"
+} elseif ($haveSource -and -not $Update) {
     Say "= using existing checkout at $AppDir"
 } else {
-    if ($Repo -eq "your-org/clipper") {
-        Warn "This script still has a placeholder repo. Re-run with -Repo owner/name"
-        Warn "or set `$env:CLIPPER_REPO. Continuing will likely fail to download."
-    }
     $zip = Join-Path $env:TEMP "clipper-src.zip"
-    $src = "https://codeload.github.com/$Repo/zip/refs/heads/$Branch"
-    Say "+ downloading $Repo@$Branch"
+    $headers = @{ "User-Agent" = "clipper-installer" }
+    if ($Token) {
+        $headers["Authorization"] = "Bearer $Token"
+        $src = "https://api.github.com/repos/$Repo/zipball/$Branch"
+        Say "+ downloading $Repo@$Branch (private, token)"
+    } else {
+        $src = "https://codeload.github.com/$Repo/zip/refs/heads/$Branch"
+        Say "+ downloading $Repo@$Branch"
+    }
     Remove-Item -Force $zip -ErrorAction SilentlyContinue
-    Get-File $src $zip
+    Invoke-WebRequest -Uri $src -OutFile $zip -Headers $headers -UseBasicParsing
     $tmp = Join-Path $env:TEMP "clipper-src-extract"
     Remove-Item -Recurse -Force $tmp -ErrorAction SilentlyContinue
     Expand-Archive -LiteralPath $zip -DestinationPath $tmp -Force
@@ -105,13 +126,16 @@ if (-not (Test-Path -LiteralPath $VenvPy)) {
 
 # --- 3. Python dependencies ----------------------------------------------
 Step "Python dependencies"
-$env:UV_PYTHON_INSTALL_DIR = Join-Path $AppDir ".pythons"
-$env:UV_CACHE_DIR          = Join-Path $AppDir ".uv-cache"
+# Respect a pre-set uv cache / python dir (lets CI and dev reuse a warm cache).
+if (-not $env:UV_PYTHON_INSTALL_DIR) { $env:UV_PYTHON_INSTALL_DIR = Join-Path $AppDir ".pythons" }
+if (-not $env:UV_CACHE_DIR) { $env:UV_CACHE_DIR = Join-Path $AppDir ".uv-cache" }
 $uv = Join-Path $Bin "uv.exe"
-$extras = @()
-foreach ($extra in ($Extras -split ",")) { if ($extra.Trim()) { $extras += @("--extra", $extra.Trim()) } }
-Say "+ uv sync $($extras -join ' ')  (first run downloads PyTorch - can take a while)"
-& $uv sync --directory $AppDir @extras
+# NB: PowerShell variables are case-insensitive - never name this `$extras`, which
+# would clobber the `$Extras` parameter.
+$extraArgs = @()
+foreach ($extra in ($Extras -split ",")) { if ($extra.Trim()) { $extraArgs += @("--extra", $extra.Trim()) } }
+Say "+ uv sync $($extraArgs -join ' ')  (first run downloads PyTorch - can take a while)"
+& $uv sync --directory $AppDir @extraArgs
 if ($LASTEXITCODE -ne 0) { Fail "dependency install failed" }
 
 # --- 4. models ------------------------------------------------------------

@@ -38,6 +38,9 @@ ml = [
     "av>=12.0",
     "scenedetect>=0.6.4",
     "silero-vad>=5.1",
+    # ctranslate2 / faster-whisper still import pkg_resources, which setuptools
+    # removed in 81+. Pin below that or transcription fails at import time.
+    "setuptools<81",
 ]
 desktop = [
     "pywebview>=5.0",
