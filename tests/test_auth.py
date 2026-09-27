@@ -123,20 +123,50 @@ def test_private_network_preflight_is_granted(client):
     response = client.options(
         "/api/nodes",
         headers={
-            "Origin": "https://clipper.vercel.app",
+            "Origin": "https://clipperpromaxgod.vercel.app",
             "Access-Control-Request-Method": "GET",
             "Access-Control-Request-Private-Network": "true",
         },
     )
     assert response.status_code == 200
     assert response.headers["access-control-allow-private-network"] == "true"
-    assert response.headers["access-control-allow-origin"] == "https://clipper.vercel.app"
+    assert (
+        response.headers["access-control-allow-origin"]
+        == "https://clipperpromaxgod.vercel.app"
+    )
 
 
-def test_cors_reflects_held_hosted_origin(client):
-    response = client.get("/api/nodes", headers={"Origin": "https://my-clip.vercel.app"})
-    assert response.status_code == 401  # rejected for auth, but CORS headers still present
-    assert response.headers["access-control-allow-origin"] == "https://my-clip.vercel.app"
+def test_cors_allows_project_domain_and_rejects_foreign(client):
+    allowed = client.get(
+        "/api/nodes", headers={"Origin": "https://clipperpromaxgod.vercel.app"}
+    )
+    assert allowed.status_code == 401  # auth still required
+    assert (
+        allowed.headers["access-control-allow-origin"]
+        == "https://clipperpromaxgod.vercel.app"
+    )
+
+    foreign = client.options(
+        "/api/nodes",
+        headers={"Origin": "https://some-other-app.vercel.app", "Access-Control-Request-Method": "GET"},
+    )
+    assert foreign.status_code == 400  # tightened default rejects other Vercel apps
+
+
+def test_default_origin_regex_is_scoped():
+    import re
+
+    from app.api import server
+
+    pattern = re.compile(server.DEFAULT_ORIGIN_REGEX)
+    assert pattern.match("https://clipperpromaxgod.vercel.app")
+    assert pattern.match("https://clipper-promax-god.vercel.app")
+    assert pattern.match("https://clipperpromaxgod-git-main-team.vercel.app")
+    assert pattern.match("http://localhost:5173")
+    assert pattern.match("http://127.0.0.1:8765")
+    assert not pattern.match("https://some-other-app.vercel.app")
+    assert not pattern.match("https://evil.vercel.app")
+    assert not pattern.match("https://clipperpromaxgod.example.com")
 
 
 def test_auth_disabled_allows_anonymous(monkeypatch):

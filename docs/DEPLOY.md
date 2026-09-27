@@ -107,6 +107,26 @@ Environment overrides:
 If you expose the engine beyond loopback (a tunnel), also terminate TLS and keep
 auth **on**.
 
+## Data, sessions and portability
+
+Each install is single-tenant — one engine, one person — so isolation is total:
+
+- Cookies, projects, settings and the engine token live under
+  `%LOCALAPPDATA%\Clipper\repo\data\` on that user's machine. The hosted UI is
+  static and holds no data.
+- **Job history is persisted** to `data/projects/<id>/jobs/*.json`, so it
+  survives an engine restart. A job that was still running when the engine
+  stopped is reloaded as `error` ("The engine restarted before this job
+  finished.").
+- **Export / import**: download a project as a portable `.zip` (the regenerable
+  `cache/` is excluded) and import it on another machine. Archives are validated
+  and rejected if they contain path-traversal entries.
+- There are no accounts or logins anywhere in the stack.
+
+The default CORS allow-list is loopback plus this project's own Vercel domains
+(`clipper-promax-god*.vercel.app`). Pin it exactly with `CLIPPER_ORIGINS`, or
+widen it with `CLIPPER_ORIGIN_REGEX`.
+
 ## Updating
 
 - **UI:** push to `main`; Vercel redeploys. Users get it on next load.

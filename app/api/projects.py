@@ -10,11 +10,13 @@ from __future__ import annotations
 
 import json
 import shutil
+import zipfile
 from datetime import datetime
 from pathlib import Path
 from typing import Any
 from urllib.parse import quote
 
+from app import paths
 from app.nodes.clips import _parse_payload
 from app.nodes.metadata import ExportMetadataNode
 from app.paths import PROJECTS, ProjectPaths
@@ -22,6 +24,8 @@ from app.run import build_context
 from app.schema import ClipList
 
 MANIFEST_NAME = "project.json"
+EXPORTS_DIR = paths.DATA / "exports"
+_CACHE_DIRNAME = "cache"
 _VIDEO_SUFFIXES = {".mp4", ".mkv", ".webm", ".mov", ".m4v", ".avi"}
 _IMAGE_SUFFIXES = {".jpg", ".jpeg", ".png", ".webp"}
 
@@ -376,3 +380,80 @@ def safe_media_path(project_id: str, rel_path: str) -> Path | None:
     if target != root and not target.is_relative_to(root):
         return None
     return target
+
+
+# --- portability: export / import -----------------------------------------
+def export_archive(project_id: str) -> Path:
+    """Zip a project's artifacts to ``data/exports/<id>.zip`` (cache excluded)."""
+    root = project_dir(project_id)
+    if not root.is_dir():
+        raise FileNotFoundError(f"project not found: {project_id}")
+
+    EXPORTS_DIR.mkdir(parents=True, exist_ok=True)
+    safe = "".join(c if c.isalnum() or c in "-_" else "_" for c in project_id) or "project"
+    target = EXPORTS_DIR / f"{safe}.zip"
+    tmp = target.with_suffix(".zip.tmp")
+
+    with zipfile.ZipFile(tmp, "w", zipfile.ZIP_DEFLATED) as archive:
+        for path in sorted(root.rglob("*")):
+            if not path.is_file():
+                continue
+            rel = path.relative_to(root)
+            if rel.parts and rel.parts[0] == _CACHE_DIRNAME:
+                continue  # regenerable, and can be huge
+            archive.write(path, rel.as_posix())
+    tmp.replace(target)
+    return target
+
+
+def _unique_project_id(preferred: str) -> str:
+    base = "".join(c if c.isalnum() or c in "-_" else "_" for c in preferred).strip("_")
+    base = base or "project"
+    candidate = base
+    index = 2
+    while exists(candidate):
+        candidate = f"{base}-{index}"
+        index += 1
+    return candidate
+
+
+def import_archive(zip_path: Path, project_id: str | None = None) -> str:
+    """Extract a Clipper export into ``data/projects/<new-id>`` and return the id."""
+    if not zip_path.is_file():
+        raise FileNotFoundError(f"archive not found: {zip_path}")
+
+    with zipfile.ZipFile(zip_path) as archive:
+        names = archive.namelist()
+        # Tolerate an export wrapped in a single top-level directory.
+        prefix = ""
+        if "project.json" not in names:
+            tops = {name.split("/", 1)[0] for name in names if "/" in name}
+            if len(tops) == 1:
+                prefix = next(iter(tops)) + "/"
+        if f"{prefix}project.json" not in names:
+            raise ValueError("not a Clipper project export (project.json missing)")
+
+        manifest = json.loads(archive.read(f"{prefix}project.json").decode("utf-8"))
+        preferred = project_id or str(manifest.get("id") or zip_path.stem)
+        new_id = _unique_project_id(preferred)
+
+        base = project_dir(new_id).resolve()
+        base.mkdir(parents=True, exist_ok=True)
+        for member in archive.infolist():
+            if member.is_dir():
+                continue
+            rel = member.filename
+            if prefix and rel.startswith(prefix):
+                rel = rel[len(prefix):]
+            if not rel:
+                continue
+            target = (base / rel).resolve()
+            if target != base and not target.is_relative_to(base):
+                raise ValueError(f"archive contains an unsafe path: {member.filename}")
+            target.parent.mkdir(parents=True, exist_ok=True)
+            with archive.open(member) as source, open(target, "wb") as out:
+                shutil.copyfileobj(source, out)
+
+    manifest["id"] = new_id
+    write_manifest(new_id, manifest)
+    return new_id

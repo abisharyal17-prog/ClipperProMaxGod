@@ -155,8 +155,61 @@ export const api = {
     post<Job>(`/api/jobs/${encodeURIComponent(jobId)}/cancel`),
 };
 
-/** Absolute URL for a `/media/...` path (respects VITE_API_BASE, else same origin). */
-export function mediaUrl(path: string | null | undefined): string {
+/** Token-bearing download URL for a project export (GET, so token rides in the query). */
+export function exportProjectUrl(projectId: string): string {
+  const token = getToken();
+  const query = token ? `?token=${encodeURIComponent(token)}` : "";
+  return `${API_BASE}/api/projects/${encodeURIComponent(projectId)}/export${query}`;
+}
+
+/** Upload a project export archive (.zip) and return the newly created project. */
+export async function importProject(file: File): Promise<ProjectSummary> {
+  const token = getToken();
+  const body = new FormData();
+  body.append("file", file);
+
+  let response: Response;
+  try {
+    response = await fetch(`${API_BASE}/api/projects/import`, {
+      method: "POST",
+      headers: {
+        Accept: "application/json",
+        ...(token ? { Authorization: `Bearer ${token}` } : {}),
+      },
+      body,
+    });
+  } catch (cause) {
+    throw new ApiError(
+      "Cannot reach the Clipper server (/api/projects/import).",
+      0,
+      cause instanceof Error ? cause.message : cause,
+    );
+  }
+
+  if (response.status === 401) {
+    window.dispatchEvent(new CustomEvent(UNAUTHORIZED_EVENT));
+  }
+
+  const text = await response.text();
+  let parsed: unknown = null;
+  if (text) {
+    try {
+      parsed = JSON.parse(text);
+    } catch {
+      parsed = text;
+    }
+  }
+  if (!response.ok) {
+    throw new ApiError(
+      messageFromDetail(parsed, `${response.status} ${response.statusText}`),
+      response.status,
+      parsed,
+    );
+  }
+  return parsed as ProjectSummary;
+}
+
+/** Absolute URL for a `/media/...` path (respects VITE_API_BASE, else same origin). */export function mediaUrl(path: string | null | undefined): string {
   if (!path) return "";
   if (/^https?:\/\//i.test(path) || path.startsWith("data:")) return path;
   const suffix = path.startsWith("/") ? path : `/${path}`;

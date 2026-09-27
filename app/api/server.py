@@ -10,11 +10,22 @@ from __future__ import annotations
 import asyncio
 import importlib.util
 import os
+import tempfile
+import zipfile
 from pathlib import Path
 from typing import Annotated, Any
 
 import orjson
-from fastapi import Body, FastAPI, HTTPException, Query, WebSocket, WebSocketDisconnect
+from fastapi import (
+    Body,
+    FastAPI,
+    File,
+    HTTPException,
+    Query,
+    UploadFile,
+    WebSocket,
+    WebSocketDisconnect,
+)
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import FileResponse
 from fastapi.staticfiles import StaticFiles
@@ -56,9 +67,11 @@ DIST = paths.ROOT / "web" / "dist"
 #: Exact browser origins allowed to call the engine (comma-separated env var).
 DEFAULT_ORIGINS = ["http://localhost:5173", "http://127.0.0.1:5173"]
 #: Regex fallback so a hosted UI works without pinning its deployment URL.
+#: Loopback (Vite dev / local desktop) plus this project's own Vercel domains.
+#: Pin exact origins with CLIPPER_ORIGINS or widen with CLIPPER_ORIGIN_REGEX.
 DEFAULT_ORIGIN_REGEX = (
-    r"^https://([a-z0-9-]+\.)*vercel\.app$"
-    r"|^http://(localhost|127\.0\.0\.1)(:\d+)?$"
+    r"^http://(localhost|127\.0\.0\.1)(:\d+)?$"
+    r"|^https://clipper-?promax-?god(-[a-z0-9-]+)?\.vercel\.app$"
 )
 
 
@@ -307,6 +320,37 @@ def create_project(body: CreateProjectRequest) -> dict[str, Any]:
         project_id, source, cookies=body.cookies, title=_default_title(source)
     )
     return projects.summary(project_id)
+
+
+@app.post("/api/projects/import", response_model=ProjectSummary)
+async def import_project(file: Annotated[UploadFile, File()]) -> dict[str, Any]:
+    """Import a previously exported project archive (.zip)."""
+    suffix = Path(file.filename or "").suffix or ".zip"
+    handle = tempfile.NamedTemporaryFile(delete=False, suffix=suffix)
+    tmp_path = Path(handle.name)
+    try:
+        with handle:
+            while chunk := await file.read(1 << 20):
+                handle.write(chunk)
+        project_id = projects.import_archive(tmp_path)
+    except (ValueError, FileNotFoundError, zipfile.BadZipFile, OSError) as exc:
+        raise HTTPException(status_code=400, detail=str(exc)) from exc
+    finally:
+        tmp_path.unlink(missing_ok=True)
+    return projects.summary(project_id)
+
+
+@app.get("/api/projects/{project_id}/export")
+def export_project(project_id: str) -> FileResponse:
+    """Download a project as a portable .zip (cache excluded)."""
+    _require_project(project_id)
+    try:
+        archive = projects.export_archive(project_id)
+    except FileNotFoundError as exc:
+        raise HTTPException(status_code=404, detail=str(exc)) from exc
+    return FileResponse(
+        archive, media_type="application/zip", filename=f"{project_id}.zip"
+    )
 
 
 @app.get("/api/projects/{project_id}", response_model=ProjectDetail)

@@ -10,12 +10,15 @@ thread-safe via ``loop.call_soon_threadsafe``.
 from __future__ import annotations
 
 import asyncio
+import json
 import threading
 import time
 import uuid
 from dataclasses import dataclass, field
+from pathlib import Path
 from typing import Any
 
+from app import paths
 from app.api import projects
 from app.api.schemas import Job, JobEvent
 from app.core.context import Cancelled
@@ -23,6 +26,49 @@ from app.pipeline.definitions import analysis_graph, render_graph
 from app.run import run_graph
 
 TERMINAL = {"done", "error", "cancelled"}
+_INTERRUPTED = "The engine restarted before this job finished."
+
+
+def _jobs_dir(project_id: str) -> Path:
+    return projects.project_dir(project_id) / "jobs"
+
+
+def _persist(job: Job) -> None:
+    """Write a job's record to disk so history survives an engine restart."""
+    try:
+        directory = _jobs_dir(job.project_id)
+        directory.mkdir(parents=True, exist_ok=True)
+        path = directory / f"{job.id}.json"
+        tmp = path.with_suffix(".tmp")
+        tmp.write_text(json.dumps(job.model_dump()), encoding="utf-8")
+        tmp.replace(path)
+    except OSError:
+        pass  # history is best-effort; never fail a job over it
+
+
+def _from_disk(path: Path) -> Job | None:
+    try:
+        job = Job.model_validate(json.loads(path.read_text(encoding="utf-8")))
+    except (OSError, ValueError):
+        return None
+    if job.status in {"queued", "running"}:
+        # No thread is driving a job loaded from disk after a restart.
+        job.status = "error"
+        job.error = _INTERRUPTED
+    return job
+
+
+def _load_project_jobs(project_id: str) -> list[Job]:
+    directory = _jobs_dir(project_id)
+    if not directory.is_dir():
+        return []
+    jobs: list[Job] = []
+    for path in directory.glob("*.json"):
+        job = _from_disk(path)
+        if job is not None:
+            jobs.append(job)
+    return jobs
+
 
 
 @dataclass
@@ -54,20 +100,35 @@ class JobRegistry:
         record = _Record(job=job)
         with self._lock:
             self._records[job.id] = record
+        _persist(job)
         return job
 
     def get(self, job_id: str) -> Job | None:
         with self._lock:
             record = self._records.get(job_id)
-            return record.job if record else None
+            if record is not None:
+                return record.job
+        return self._find_on_disk(job_id)
+
+    def _find_on_disk(self, job_id: str) -> Job | None:
+        base = paths.PROJECTS
+        if not base.is_dir():
+            return None
+        for project_dir in base.iterdir():
+            candidate = project_dir / "jobs" / f"{job_id}.json"
+            if candidate.is_file():
+                return _from_disk(candidate)
+        return None
 
     def list_for_project(self, project_id: str) -> list[Job]:
         with self._lock:
-            jobs = [
+            live = [
                 rec.job for rec in self._records.values()
                 if rec.job.project_id == project_id
             ]
-        jobs.sort(key=lambda job: job.created, reverse=True)
+        merged: dict[str, Job] = {job.id: job for job in _load_project_jobs(project_id)}
+        merged.update({job.id: job for job in live})
+        jobs = sorted(merged.values(), key=lambda job: job.created, reverse=True)
         return jobs
 
     def cancel(self, job_id: str) -> Job | None:
@@ -99,14 +160,18 @@ class JobRegistry:
         """
         with self._lock:
             record = self._records.get(job_id)
-            if record is None:
-                return None
-            replayed = [event.model_dump() for event in record.job.events]
-            if record.job.status in TERMINAL:
-                return replayed, None, record.job.status
-            queue: asyncio.Queue = asyncio.Queue()
-            record.subscribers.append((loop, queue))
-            return replayed, queue, None
+            if record is not None:
+                replayed = [event.model_dump() for event in record.job.events]
+                if record.job.status in TERMINAL:
+                    return replayed, None, record.job.status
+                queue: asyncio.Queue = asyncio.Queue()
+                record.subscribers.append((loop, queue))
+                return replayed, queue, None
+        # Not live: a persisted terminal job replays from disk, otherwise unknown.
+        job = self._find_on_disk(job_id)
+        if job is None:
+            return None
+        return [event.model_dump() for event in job.events], None, job.status
 
     def unsubscribe(self, job_id: str, queue: asyncio.Queue | None) -> None:
         if queue is None:
@@ -131,6 +196,7 @@ class JobRegistry:
     def _run(self, record: _Record, project_id: str, options: dict[str, Any]) -> None:
         job = record.job
         job.status = "running"
+        _persist(job)
         status = "done"
         source = projects.resolve_source(project_id)
 
@@ -212,6 +278,7 @@ class JobRegistry:
             record.job.status = status  # type: ignore[assignment]
             subscribers = list(record.subscribers)
             record.subscribers.clear()
+        _persist(record.job)
         _dispatch(subscribers, {"type": "__status", "status": status})
 
 

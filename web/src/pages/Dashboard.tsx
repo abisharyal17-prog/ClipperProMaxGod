@@ -1,15 +1,25 @@
-import { useMemo, useState } from "react";
+import { useMemo, useRef, useState } from "react";
 import { Link, useNavigate } from "react-router-dom";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
-import { Film, Plus, Search, Trash2 } from "lucide-react";
+import { Download, Film, Plus, Search, Trash2, Upload } from "lucide-react";
 
-import { api, mediaUrl, queryKeys } from "../lib/api";
+import { api, exportProjectUrl, importProject, mediaUrl, queryKeys } from "../lib/api";
 import { errorMessage } from "../lib/errors";
 import { relativeTime, titleOf } from "../lib/format";
 import type { ProjectSummary } from "../lib/types";
 import { NewProjectDialog } from "../components/NewProjectDialog";
 import { EmptyState, ErrorState, SkeletonCardGrid } from "../components/common/States";
 import { Badge, Button, Card, Dialog, Input, Menu, useToast } from "../components/ui";
+
+function downloadExport(projectId: string): void {
+  const link = document.createElement("a");
+  link.href = exportProjectUrl(projectId);
+  link.rel = "noopener";
+  document.body.appendChild(link);
+  link.click();
+  link.remove();
+}
+
 
 function ProjectCard({
   project,
@@ -50,6 +60,11 @@ function ProjectCard({
               ariaLabel={`Actions for ${title}`}
               align="right"
               items={[
+                {
+                  label: "Export",
+                  icon: <Download className="h-3.5 w-3.5" aria-hidden="true" />,
+                  onSelect: () => downloadExport(project.id),
+                },
                 {
                   label: "Delete",
                   icon: <Trash2 className="h-3.5 w-3.5" aria-hidden="true" />,
@@ -116,6 +131,18 @@ export default function Dashboard() {
     onError: (error) => toast.error("Could not delete project", { description: errorMessage(error) }),
   });
 
+  const fileInputRef = useRef<HTMLInputElement>(null);
+
+  const importMutation = useMutation({
+    mutationFn: (file: File) => importProject(file),
+    onSuccess: (project) => {
+      toast.success("Project imported", { description: titleOf(project) });
+      void queryClient.invalidateQueries({ queryKey: queryKeys.projects });
+      navigate(`/p/${encodeURIComponent(project.id)}`);
+    },
+    onError: (error) => toast.error("Could not import project", { description: errorMessage(error) }),
+  });
+
   const projects = projectsQuery.data ?? [];
 
   const filtered = useMemo(() => {
@@ -152,6 +179,14 @@ export default function Dashboard() {
           />
         </div>
         <Button
+          variant="secondary"
+          leftIcon={<Upload className="h-4 w-4" aria-hidden="true" />}
+          loading={importMutation.isPending}
+          onClick={() => fileInputRef.current?.click()}
+        >
+          Import
+        </Button>
+        <Button
           variant="primary"
           leftIcon={<Plus className="h-4 w-4" aria-hidden="true" />}
           onClick={() => setDialogOpen(true)}
@@ -159,6 +194,18 @@ export default function Dashboard() {
           New project
         </Button>
       </div>
+
+      <input
+        ref={fileInputRef}
+        type="file"
+        accept=".zip,application/zip"
+        className="hidden"
+        onChange={(event) => {
+          const file = event.target.files?.[0];
+          event.target.value = "";
+          if (file) importMutation.mutate(file);
+        }}
+      />
 
       {projectsQuery.isLoading ? (
         <SkeletonCardGrid count={8} />

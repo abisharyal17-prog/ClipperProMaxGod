@@ -23,6 +23,9 @@ data/cookies/
 data/settings.json
 data/auth.json
 
+# Project export archives
+data/exports/
+
 # Frontend
 web/node_modules/
 web/dist/
